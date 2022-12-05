@@ -192,10 +192,7 @@ func (p7 *PKCS7) UnmarshalSignedAttribute(attributeType asn1.ObjectIdentifier, o
 func parseSignedData(data []byte) (*PKCS7, error) {
 	var sd signedData
 	asn1.Unmarshal(data, &sd)
-	certs, err := sd.Certificates.Parse()
-	if err != nil {
-		return nil, err
-	}
+	certs, certErr := sd.Certificates.Parse()
 	// fmt.Printf("--> Signed Data Version %d\n", sd.Version)
 
 	var compound asn1.RawValue
@@ -210,7 +207,7 @@ func parseSignedData(data []byte) (*PKCS7, error) {
 	// Compound octet string
 	if compound.IsCompound {
 		if compound.Tag == 4 {
-			if _, err = asn1.Unmarshal(compound.Bytes, &content); err != nil {
+			if _, err := asn1.Unmarshal(compound.Bytes, &content); err != nil {
 				return nil, err
 			}
 		} else {
@@ -225,7 +222,7 @@ func parseSignedData(data []byte) (*PKCS7, error) {
 		Certificates: certs,
 		CRLs:         sd.CRLs,
 		Signers:      sd.SignerInfos,
-		raw:          sd}, nil
+		raw:          sd}, certErr
 }
 
 // verifyCertChain takes an end-entity certs, a list of potential intermediates and a
