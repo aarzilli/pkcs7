@@ -106,12 +106,12 @@ func lengthLength(i int) (numBytes int) {
 // added to 0x80. The length is encoded in big endian encoding follow after
 //
 // Examples:
-//  length | byte 1 | bytes n
-//  0      | 0x00   | -
-//  120    | 0x78   | -
-//  200    | 0x81   | 0xC8
-//  500    | 0x82   | 0x01 0xF4
 //
+//	length | byte 1 | bytes n
+//	0      | 0x00   | -
+//	120    | 0x78   | -
+//	200    | 0x81   | 0xC8
+//	500    | 0x82   | 0x01 0xF4
 func encodeLength(out *bytes.Buffer, length int) (err error) {
 	if length >= 128 {
 		l := lengthLength(length)
@@ -168,6 +168,7 @@ func readObject(ber []byte, offset int) (asn1Object, int, error) {
 	} else {
 		debugprint("--> Constructed\n")
 	}
+	class := b & 0xc0
 	// read length
 	var length int
 	l := ber[offset]
@@ -255,11 +256,29 @@ func readObject(ber []byte, offset int) (asn1Object, int, error) {
 		contentEnd = offset + 2
 	}
 
+	if tag == 0x04 && kind != 0 && class == 0x00 {
+		// Go can't deal with CONSTRUCTED OCTET STRING, so replace this with a octet string
+		obj2 := asn1Primitive{tagBytes: []byte{0x04}}
+
+		for _, subObj := range obj.(asn1Structured).content {
+			so, ok := subObj.(asn1Primitive)
+			if !ok {
+				return nil, 0, errors.New("weird constructed octet string")
+			}
+			if so.tagBytes[0] != 0x04 {
+				return nil, 0, errors.New("weird constructed octet string")
+			}
+			obj2.length = obj2.length + so.length
+			obj2.content = append(obj2.content, so.content...)
+		}
+		obj = obj2
+	}
+
 	return obj, contentEnd, nil
 }
 
 func isIndefiniteTermination(ber []byte, offset int) (bool, error) {
-	if len(ber) - offset < 2 {
+	if len(ber)-offset < 2 {
 		return false, errors.New("ber2der: Invalid BER format")
 	}
 
